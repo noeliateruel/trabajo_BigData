@@ -8,13 +8,13 @@ Repo utilizado para elaborar el trabajo individual para la asignatura "Programac
 
 
 <!-- En la linea de abajo HAS de SUSTITUIR "perezp44" por tu usuario de Github-->
-La versión final del trabajo puede visualizarse en: <https://perezp44.github.io/trabajo_BigData/>. 
+La versión final del trabajo puede visualizarse en: <https://noeliateruel.github.io/trabajo_BigData/>. 
 
 
 <!-- Abajo podéis escribir lo que queráis, igual un resumen del trabajo, o ..., o ... pero al menos, tenéis que poner el título del trabajo y el nombre de los componentes del equipo-->
 
-El autor del trabajo soy yo, Manuel Coraza Grande (macogaaaa@alumni.uv.es), .....
+El autor del trabajo soy yo, Noelia Teruel Ortega(noteor@alumni.uv.es)
 
-El título del trabajo es .....  En el trabajo hago  .... blah-blah ...
+El título del trabajo es Rosalía y C. Tangana. En el trabajo hago un análisis sobre los últimos álbumes publicados de estos artistas.
 
 
