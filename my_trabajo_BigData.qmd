@@ -1,0 +1,468 @@
+---
+title: "Rosalía y C. Tangana en Spotify"
+description: |
+  Analizando las canciones de los últimos álbumes de Rosalía y C. tangana
+author: Noelia Teruel Ortega (noteor@alumni.uv.es)  #--
+date: 2023-01-13                  #--
+categories: [trabajo BigData, artistas, C. Tangana, Rosalía, Spotify]   #--
+image: "./imagenes/imagen_01.png"
+title-block-banner: true #- {true, false, "green","#AA0000"}
+title-block-banner-color: "black"    #-"#color de la letra del titulo de la pagina principal 
+toc: true
+toc-location: left
+toc-depth: 3
+smooth-scroll: true
+format: 
+  html:
+    backgroundcolor: "white"
+    #standalone: true  
+    link-external-newwindow: true
+    #css: ./assets/my_css_file.css   #- CUIDADO!!!!
+code-tools: true
+code-link: true
+---
+
+
+# 1. **INTRODUCCIÓN**
+
+## **Motivación**
+Para la asignatura de Big Data también teníamos que realizar un trabajo individual, yo en mi caso he decidido hacerlo sobre música, en concreto sobre Rosalía y C. Tangana que pienso que son grandes artistas actualmente en nuestro país.
+
+## **Datos**
+Los Datos los he extraído de mi propio Spotify, para ello seguí el taller de uno de los ejemplos de la clase_12 y obteniendo mis credenciales siguiendo otro tutorial pude obtener los datos de la API de Spotify, los paquetes que he utilizado tienen más funciones que permiten conocer por ejemplo cuales han sido tus 5 artistas más escuchados o tu canción favorita.
+
+## **Una pequeña biografía de los artistas**
+
+Rosalía Vila Tobella, conocida profesionalmente como Rosalía, es una cantante, compositora y productora discográfica española. Es conocida por su música flamenca fusionada con elementos del pop, el R&B y el reggaetón. Ha ganado varios premios, incluyendo el Grammy Latino y el Premio Nacional de Música. Su álbum debut "Los Ángeles" fue lanzado en 2017, y su segundo álbum "El Mal Querer" fue lanzado en 2018. Rosalía se ha destacado en la escena musical española y mundial por su gran creatividad y innovación en su música y su estética, ha colaborado con artistas de renombre como James Blake, Billie Eilish, Pharrell Williams y J Balvin.
+
+![Rosalía](https://phantom-elmundo.unidadeditorial.es/3c778c8b8d0341d7c00cefea2248ac51/crop/0x0/1919x1278/resize/1200/f/jpg/assets/multimedia/imagenes/2020/12/16/16081385853962.jpg)
+
+C. Tangana es un rapero y cantante español de Madrid, España. Comenzó su carrera como rapero en la escena underground del hip-hop en España, pero ha logrado tener éxito en el mainstream. Ha lanzado varios álbumes en solitario, incluyendo "Èl Último Tour de la Humanidad" y "Antes de Morirme", y ha colaborado con otros artistas como Rosalía y Alizzz. C. Tangana es conocido por su estilo único de combinar la música flamenca tradicional con influencias modernas de hip-hop y R&B.
+
+![C. Tangana](https://imagenes.20minutos.es/files/og_thumbnail/uploads/imagenes/2021/02/22/c-tangana-en-los40-music-awards-en-2020.jpeg)
+
+
+
+```{r}
+library(tidyverse) # Manipulación de datos
+library(gt)        # Tablas gt: grammar of tables
+library(gtExtras)  # Extras de tablas gt
+library(spotifyr)  #install.packages("spotifyr")
+library(rjson)     #install.packages("rjson")
+library(ggrepel) 
+```
+
+
+# 2. TABLAS
+## **Tabla completa sobre los álbumes de Rosalía**
+
+```{r}
+
+ARTISTA = 'ROSALIA'
+
+vars_audio = c(
+  'danceability', 'energy', 'loudness', 'acousticness', 'instrumentalness')
+
+
+df_artist_features <- get_artist_audio_features(artist = ARTISTA) %>%
+  select(
+    artist_id, artist_name, album_id, album_name,
+    album_release_date, album_images, track_name, duration_ms,
+    all_of(vars_audio)       
+  ) %>% 
+  arrange(desc(album_release_date))
+
+df_albums <- df_artist_features %>% 
+  group_by(
+    album_images, artist_name, album_id, album_name, album_release_date
+  ) %>%
+  summarise(duration_mins = sum(duration_ms/(1000*60)),
+            across(all_of(vars_audio), ~ list(.x)),
+  ) %>% 
+  ungroup()
+
+
+df_albums <- df_albums %>% select(-instrumentalness)
+
+
+tabla_albums <- df_albums %>%  select(-album_id) %>% 
+  
+  
+  gt() %>% 
+  
+  tab_header(
+    title = md(glue::glue('**{str_to_title(ARTISTA)}** en Spotify')),
+    subtitle = 'Álbumes más recientes'
+  ) %>% 
+  
+  text_transform(
+    locations = cells_body(columns = c(album_images)),
+    fn = function(album_images) {
+      lapply(album_images, web_image, height = 50)
+    }
+  ) 
+
+get_imagen = function(album_images){
+  album_images %>% 
+    data.frame() %>% 
+    filter(height==64) %>% 
+    pull(url) %>% 
+    as.character()
+}
+
+df_albums <- df_albums %>% 
+  mutate(album_images = map(album_images, ~get_imagen(album_images=.x))) %>% 
+  distinct()
+
+tabla_albums <- df_albums %>%  select(-album_id) %>% 
+  
+  gt() %>% 
+  
+  tab_header(
+    title = md(glue::glue('**{str_to_title(ARTISTA)}** en Spotify')),
+    subtitle = 'Álbumes más recientes'
+  ) %>% 
+  
+  text_transform(
+    locations = cells_body(columns = c(album_images)),
+    fn = function(album_images) {
+      lapply(album_images, web_image, height = 50)
+    }
+  ) 
+
+tabla_albums <- tabla_albums %>%  
+  
+  gt_merge_stack(
+    col1 = album_name, 
+    col2 = artist_name
+  ) 
+
+
+tabla_albums <- tabla_albums %>% 
+  
+  gt_color_box(columns = duration_mins, 
+               palette=c('white'), 
+               domain=c(0,round(max(df_albums$duration_mins))+1)) %>% 
+  
+  gt_plt_dist(column = danceability, 
+              type = "density", line_color = "black", 
+              fill_color = "green") %>% 
+  
+  gt_plt_dist(column = energy, 
+              type = "density", line_color = "black", 
+              fill_color = "green") %>% 
+  
+  gt_plt_dist(column = loudness,
+              type = "density", line_color = "black", 
+              fill_color = "green") %>% 
+  
+  gt_plt_dist(column = acousticness,
+              type = "boxplot", line_color = "black", 
+              fill_color = "green")
+
+
+tabla_albums <- tabla_albums %>% 
+  
+  gt::tab_footnote(
+    locations=cells_column_labels('duration_mins'), 
+    footnote='Duración en minutos = suma de la duración de cada una de las canciones que componen el álbum.') %>% 
+  
+  
+  gt::tab_source_note(source_note='Fuente: API de Spotify') %>% 
+  
+  cols_label(
+    album_images = '',
+    album_name = '',
+    album_release_date = 'Lanzamiento',
+    duration_mins = 'Duración',
+    danceability = 'Danceability 🕺',
+    energy = 'Energy ✨',
+    loudness = 'Loudness 🔊',
+    acousticness = 'Acousticness 🎹'
+  )  
+
+my_theme <- function(gt_object, ...){
+  gt_object %>%
+    tab_options(
+      column_labels.background.color = "#FFAEB9",
+      footnotes.background.color = "#FFF0F5",
+      source_notes.background.color = "#FFF0F5",
+      heading.background.color = "#CD8C95",
+      heading.align = "left",
+      ...
+    ) %>%
+    tab_style(
+      style = cell_text(color = "black", size = px(32)),
+      locations = cells_title("title")
+    )
+}
+
+tabla_albums <- tabla_albums %>% 
+  my_theme()
+
+tabla_albums
+
+```
+
+## **Otra forma de visualizar la tabla con los álbumes de C.Tangana**
+
+```{r}
+ARTISTA = 'C. Tangana'
+
+vars_audio = c(
+  'danceability', 'energy', 'loudness', 'acousticness', 'instrumentalness'
+)
+
+df_artist_features_xx <- get_artist_audio_features(artist = ARTISTA) %>%
+  select(
+    artist_id, artist_name, album_id, album_name,
+    album_release_date, album_images, track_name, duration_ms,
+    all_of(vars_audio)       
+  ) %>% 
+  arrange(desc(album_release_date))
+
+df_albums_xx <- df_artist_features_xx %>% 
+  group_by(
+    album_images, artist_name, album_id, album_name, album_release_date
+  ) %>%
+  summarise(duration_mins = sum(duration_ms/(1000*60)),
+            across(all_of(vars_audio), ~ list(.x)),
+  ) %>% 
+  ungroup()
+
+tablac <- df_albums_xx %>% 
+  select(artist_name, album_name, album_release_date, duration_mins) %>% 
+  gt()
+
+tablac %>% 
+  tab_header(
+    title = md('**C.Tangana** en Spotify'),
+    subtitle = 'Álbumes más recientes'
+  ) %>% 
+  gt_color_box(
+    columns = duration_mins, palette=c('white', 'green'), 
+    domain=c(0,round(max(df_albums_xx$duration_mins))+1))
+
+```
+
+# 3. **ANÁLISIS DE LOS ÁLBUMES CON LOS DATOS.** 
+
+
+
+## 3.1 **Bailabilidad Media** {.tabset .tabset-pills}
+
+Para ello he calculado la bailabilidad media de los álbumes de cada artista por separado para después unirlo con la opción (full_join) y así poder compararlos.
+Como se puede observar la bailabilidad media de los álbumes de Rosalía ha ido en aumento mientrás que con C.Tangana ocurre lo contrario, a lo largo del tiempo (basándonos en la fecha de publicación de sus álbumes) ha ido disminuyendo.
+
+::: {.panel-tabset}
+
+
+
+### Rosalía
+
+```{r}
+xx <- df_artist_features_xx %>%
+  group_by(album_release_date) %>%
+  summarise(bailabilidad_media = mean(danceability))
+
+rr <- df_artist_features%>%
+  group_by(album_release_date) %>%
+  summarise(bailabilidad_media = mean(danceability))
+
+
+df_left_join_xx <- left_join(df_albums_xx, xx)
+
+df_left_join_rosalia <- left_join(df_albums, rr)
+
+df_full_join_artistas <- full_join(df_left_join_xx, df_left_join_rosalia)
+
+r1 <- ggplot(df_left_join_rosalia, aes(x = album_release_date, y = bailabilidad_media, color = artist_name)) + geom_point() + geom_line(aes(group = artist_name)) + labs(title = "BAILABILIDAD MEDIA de LOS ÁLBUMES ", subtitle = "de Rosalía")
+
+r1
+```
+
+### C. Tangana
+
+```{r}
+c1 <- ggplot(df_left_join_xx, aes(x = album_release_date, y = bailabilidad_media, color = artist_name)) + geom_point() + geom_line(aes(group = artist_name)) + labs(title = "BAILABILIDAD MEDIA de LOS ÁLBUMES ", subtitle = "de C.Tangana")
+
+c1
+```
+
+### Juntos
+
+```{r}
+rc1 <- ggplot(df_full_join_artistas, aes(x = album_release_date, y = bailabilidad_media, color = artist_name)) + geom_point() + geom_line(aes(group = artist_name)) + labs(title = "BAILABILIDAD MEDIA de LOS ÁLBUMES ", subtitle = "juntos por artista")
+
+rc1
+```
+
+:::
+
+## 3.2 **¿Cúales son las 6 canciones con mayor energía de cada artista?**
+
+En el caso de Rosalía son: SAOKO, BIZCOCHITO, LA FAMA - Live en el Palau Sant Jordi, PIENSO EN TU MIRÁ, CANDY Remix y QUE NO SALGA LA LUNA ordenadas de mayor a menor con la función de fct_infreq.
+Para poder calcular cuales eran las 6 canciones con mayor energía utilicé la opción summarise y slice que en lugar de ser c(1:6) es c(1:8) ya que en Motomami y Motomami + se repetían las canciones BIZCOCHITO y SAOKO.
+
+```{r}
+aa <- df_artist_features %>% 
+  select(track_name, album_name, energy) %>%
+  group_by(album_name, track_name) %>%
+  summarise(energia = sum(energy, na.rm = TRUE)) %>%   #- cuidado con na.rm = FALSE
+  ungroup() %>% 
+  arrange(desc(energia)) %>% 
+  slice(c(1:8))
+
+p6 <- ggplot(aa, aes(x = energia, y = track_name)) + 
+  geom_col(fill = "steelblue") + coord_flip() 
+
+df <- aa %>% mutate(energia.f = forcats::as_factor(energia)) #- convertimos la v. class a factor con la f. as_factor()
+df <- df %>% mutate(energia.ff = forcats::fct_infreq(energia.f))
+
+df_ros <- df %>% 
+  mutate(canciones_rosalia = forcats::fct_reorder(track_name, energia))
+
+#- fct_infreq() los niveles del factor según su frecuencia de mayor a menor
+p <- ggplot(df_ros,  aes(y = energia, x = canciones_rosalia)) + 
+  geom_col(fill = "#FFAEB9")  + coord_flip()
+p
+```
+
+
+En el caso de C. Tangana las 6 canciones con mayor energía de C. Tangana órdenadas de mayor a menor son: La Culpa (feat. Canelita), Pa Que Brille, Caballo Ganador, Huele a Nuevo (feat. Sticky M.A., Danni Ble & Royce Rolo), Yate y por último Sangre (feat. Steve Lean & Saox).
+
+```{r}
+aac <- df_artist_features_xx %>% 
+  select(track_name, album_name, energy) %>%
+  group_by(album_name, track_name) %>%
+  summarise(energia = sum(energy, na.rm = TRUE)) %>%   #- cuidado con na.rm = FALSE
+  ungroup() %>% 
+  arrange(desc(energia)) %>% 
+  slice(c(1:6))
+
+df_c <- aac %>% mutate(energia.f = forcats::as_factor(energia)) #- convertimos la v. class a factor con la f. as_factor()
+df_cc <- df_c %>% mutate(energia.ff = forcats::fct_infreq(energia.f))
+
+df_ccc <- df_cc %>% 
+  mutate(canciones_ctangana = forcats::fct_reorder(track_name, energia))
+
+p <- ggplot(df_ccc,  aes(y = energia, x = canciones_ctangana)) + 
+  geom_col(fill = "#B4EEB4") + coord_flip()
+p
+```
+
+## 3.3 **Relación entre la bailabilidad y la energía de los álbumes**
+
+Como se puede observar en los álbumes de Rosalía existe una relación positiva entre la energía y la bailabilidad de las canciones que componen el álbum, excepto en el álbum Los Ángeles donde existe una relación negativa entre estas dos variables.
+
+```{r}
+p1 <- ggplot(df_artist_features, aes(x = danceability, y = energy, color = album_name)) + geom_point() + labs(title = "Relación entre las variables bailabilidad y energía de Rosalía")
+
+
+pr <- p1 + geom_smooth(method = "lm", se = FALSE)
+
+
+plotly::ggplotly(pr)
+```
+
+
+El caso de C. Tangana la relación entre las dos variables es más constante en el caso de "El Madrileño" y el "El Madrileño (La Sobremesa)", pero no se puede decir lo mismo en "Avida Dollars" y "Ídolo" donde mayor energía no implica mayor bailabilidad, (que sería lo habitual). Por tanto en estos dos últimos álbumes a mayor energía menor bailabilidad.
+```{r}
+p2 <- ggplot(df_artist_features_xx, aes(x = danceability, y = energy, color = album_name)) + geom_point() + labs(title = "Relación entre las variables bailabilidad y energía de C. Tangana")
+
+pc <- p2 + geom_smooth(method = "lm", se = FALSE)
+
+plotly::ggplotly(pc)
+```
+
+
+## 3.4 **¿Qué álbumes tienen las canciones con mayor energía?**
+
+En el caso de Rosalía el álbum ganador es Motomami +, sin embargo, en el caso de C. Tangana hay un empate entre Avida Dollars, El Madrileño y El Madrileño (La sobremesa).
+```{r}
+aarr <- df_artist_features %>% 
+  select(track_name, album_name, energy) %>%
+  group_by(album_name, track_name) %>%
+  summarise(energia = sum(energy, na.rm = TRUE)) %>%   #- cuidado con na.rm = FALSE
+  ungroup() %>% 
+  arrange(desc(energia)) %>% 
+  slice(c(1:10))
+
+
+grafico1 <- ggplot(aarr, aes(x="", y = energia, fill = album_name)) +     
+  geom_bar(stat ="identity", color = "black") + 
+  geom_text(aes(label = energia), position = position_stack(vjust=0.6), color="black", size = 2.5, ) + 
+  coord_polar(theta = "y")  + 
+  theme_void() +labs(title = "Proporción de los álbumes con las 10 canciones de mayor energía", subtitle = "de Rosalia")
+
+grafico1
+```
+
+
+```{r}
+aacc <- df_artist_features_xx %>% 
+  select(track_name, album_name, energy) %>%
+  group_by(album_name, track_name) %>%
+  summarise(energia = sum(energy, na.rm = TRUE)) %>%   #- cuidado con na.rm = FALSE
+  ungroup() %>% 
+  arrange(desc(energia)) %>% 
+  slice(c(1:10))
+
+
+graficoc1 <- ggplot(aacc, aes(x="", y = energia, fill = album_name)) +     
+  geom_bar(stat ="identity", color = "black") + 
+  geom_text(aes(label = energia), position = position_stack(vjust=0.6), color="black", size = 2.5, ) + 
+  coord_polar(theta = "y")  + 
+  theme_void() +labs(title = "Proporción de los álbumes con las 10 canciones de mayor energía", subtitle = "de C.Tangana")
+
+graficoc1
+
+```
+
+# 4. Curiosades sobre los artistas
+
+```{r, echo = FALSE, out.width = "60%"}
+library("vembedr")
+embed_url("https://www.youtube.com/watch?v=MQkc7Fzof3o")
+```
+
+```{r, echo = FALSE, out.width = "60%"}
+library("vembedr")
+embed_url("https://www.youtube.com/watch?v=sGE86reT6dY")
+```
+
+
+
+# 5. Bibliografía
+
+Para realizar este trabajo me basé en la página web de la asignatura y en el tutorial de la clase_12.
+
+[Página Web de la Asignatura](https://perezp44.github.io/intro-ds-22-23-web/index.html)
+
+<br>
+
+[Tutorial](https://karbartolome.github.io/gt-spotify/01_slides/rladies_gt_spotify.html#1).
+
+
+
+Con esto acabo mi trabajo para BigData!!
+
+<br>
+
+----------------------
+
+<br>
+
+### Información sobre la sesión
+
+Abajo muestro mi entorno de trabajo y paquetes utilizados
+
+```{r}
+#| echo: false
+sessioninfo::session_info() %>% 
+  details::details(summary = 'current session info') 
+```
+
+
+
+
